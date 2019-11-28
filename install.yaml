@@ -1,0 +1,115 @@
+---
+- hosts: raspberry-pi
+  vars:
+    services:
+      - name: watcher.service
+        description: Watcher Daemon
+        syslog_identifier: watcher
+        working_directory: /opt/watcher
+        exec_start: /usr/bin/python3 /mnt/tools/watcher/watcher.py --daemon --conf /mnt/tools/config/watcher/watcher.cfg --db /mnt/tools/config/watcher/database.sqlite --log /mnt/tools/config/watcher --pid /mnt/tools/config/watcher/watcher.pid --address 0.0.0.0
+        pid: PIDFile=/mnt/tools/config/watcher/watcher.pid
+        service_type: forking
+  tasks:
+    - name: create plex user
+      become: yes
+      user:
+        name: plex
+        comment: plex
+        uid: 972
+        state: present
+    - name: install nfs-common
+      become: yes
+      apt:
+        name: nfs-common
+        state: present
+
+    - name: install transmission
+      become: yes
+      apt:
+        name: transmission-daemon
+        state: present
+    - name: change transmission user to plex
+      become: yes
+      lineinfile:
+        path: /lib/systemd/system/transmission-daemon.service
+        regexp: '^User='
+        line: User=plex
+    - name: install git
+      become: yes
+      apt:
+        name: git
+        state: present
+
+    - name: create nfs mountpoint
+      become: yes
+      mount:
+        path: /mnt
+        src: 10.0.0.10:/mnt/usb1/media
+        boot: yes
+        fstype: nfs
+        state: mounted
+
+    - name: Create tools directory if it does not exist
+      file:
+        path: /mnt/tools
+        state: directory
+        owner: pi
+        group: pi
+        mode: '0755'
+
+    - name: Create config directory if it does not exist
+      file:
+        path: /mnt/tools/config
+        state: directory
+        owner: pi
+        group: pi
+        mode: '0755'
+
+    - name: download jackett
+      get_url:
+        url: https://github.com/Jackett/Jackett/releases/download/v0.12.1035/Jackett.Binaries.LinuxARM32.tar.gz
+        dest: /tmp/Jackett.Binaries.LinuxARM32.tar.gz
+
+    - name: extract archive
+      unarchive:
+        src: /tmp/Jackett.Binaries.LinuxARM32.tar.gz
+        dest: /mnt/tools
+        remote_src: yes
+
+    - name: install jackett service
+      become: yes
+      command: /mnt/tools/Jackett/install_service_systemd.sh
+
+    - name: Create watcher directory if it does not exist
+      become: yes
+      file:
+        path: /mnt/tools/watcher
+        state: directory
+        owner: pi
+        group: pi
+        mode: '0755'
+
+    - name: Create watcher config directory if it does not exist
+      become: yes
+      file:
+        path: /mnt/tools/config/watcher
+        state: directory
+        owner: pi
+        group: pi
+        mode: '0755'
+
+    - name: downloading watcher
+      git:
+        repo: https://github.com/nosmokingbandit/Watcher3.git
+        dest: /mnt/tools/watcher
+
+    - name: create service files
+      become: yes
+      template:
+        src: service-template.j2
+        dest: /etc/systemd/system/{{item.name}}
+      with_items: "{{services}}"
+
+    - name: reload systemctl
+      become: yes
+      command: systemctl daemon-reload
