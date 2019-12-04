@@ -1,6 +1,11 @@
 ---
 - hosts: raspberry-pi
   vars:
+    watcher: false
+    nfs: false
+    git: false
+    transmission: false
+    jackett: false
   tasks:
     - name: Ensure group "plex" exists
       become: yes
@@ -16,11 +21,13 @@
         uid: 972
         group: "972"
         state: present
+
     - name: install nfs-common
       become: yes
       apt:
         name: nfs-common
         state: present
+      when: nfs
 
     - name: create nfs mountpoint
       become: yes
@@ -30,12 +37,21 @@
         boot: yes
         fstype: nfs
         state: mounted
+      when: nfs
+
+    - name: install git
+      become: yes
+      apt:
+        name: git
+        state: present
+      when: git
 
     - name: install transmission
       become: yes
       apt:
         name: transmission-daemon
         state: present
+      when: transmission
 
     - name: change transmission user to plex
       become: yes
@@ -43,12 +59,14 @@
         path: /lib/systemd/system/transmission-daemon.service
         regexp: '^User='
         line: User=plex
+      when: transmission
 
     - name: change config file ownership
       become: yes
       file:
         path: /etc/transmission-daemon
         group: plex
+      when: transmission  
     
     - name: change config file ownership
       become: yes
@@ -56,6 +74,7 @@
         path: /etc/transmission-daemon/settings.json
         group: plex
         owner: plex
+      when: transmission
 
     - name: updating whitelist
       become: yes
@@ -63,25 +82,29 @@
         path: /home/plex/.config/transmission-daemon/settings.json
         regexp: '    "rpc-whitelist": "127.0.0.1",'
         line: '    "rpc-whitelist": "127.0.0.1,10.0.0.*",'
-        
-    - name: change config file ownership
+      when: transmission
+
+    - name: change transmission config file ownership
       become: yes
       file:
         path: /var/lib/transmission-daemon/downloads
         group: plex
         owner: plex
-  
+      when: transmission
+
     - name: download jackett
       get_url:
         url: https://github.com/Jackett/Jackett/releases/download/v0.12.1035/Jackett.Binaries.LinuxARM32.tar.gz
         dest: /tmp/Jackett.Binaries.LinuxARM32.tar.gz
-  
+      when: jackett
+
     - name: extract archive
       become: yes
       unarchive:
         src: /tmp/Jackett.Binaries.LinuxARM32.tar.gz
         dest: /opt
         remote_src: yes
+      when: jackett
 
     - name: change jacket file ownership
       become: yes
@@ -91,10 +114,54 @@
         group: plex
         owner: plex
         recurse: yes
-  
+      when: jackett
+
     - name: install jackett service
       become: yes
       command: /opt/Jackett/install_service_systemd.sh
+      when: jackett
+
+    - name: Create watcher directory if it does not exist
+      become: yes
+      file:
+        path: /opt/watcher
+        state: directory
+        owner: pi
+        group: pi
+        recurse: yes
+        mode: '0755'
+
+    # - name: Create watcher config directory if it does not exist
+    #   become: yes
+    #   file:
+    #     path: /mnt/tools/config/watcher
+    #     state: directory
+    #     owner: pi
+    #     group: pi
+    #     mode: '0755'
+
+    - name: downloading watcher
+      git:
+        repo: https://github.com/nosmokingbandit/Watcher3.git
+        dest: /opt/watcher
+      when: watcher
+
+    - name: Create watcher directory if it does not exist
+      become: yes
+      file:
+        path: /opt/watcher
+        owner: plex
+        group: plex
+        recurse: yes
+      when: watcher
+
+    - name: create watcher service files
+      become: yes
+      copy:
+        src: watcher.service
+        dest: /etc/systemd/system/watcher.service
+        owner: plex
+        group: plex
 
     - name: reload systemctl
       become: yes
