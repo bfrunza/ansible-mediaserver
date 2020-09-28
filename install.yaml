@@ -4,7 +4,7 @@
     watcher: false
     nfs: false
     git: false
-    transmission: false
+    transmission: yes
     jackett: false
   tasks:
     - name: Ensure group "plex" exists
@@ -84,6 +84,33 @@
         line: '    "rpc-whitelist": "127.0.0.1,10.0.0.*",'
       when: transmission
 
+    - name: updating download dir
+      become: yes
+      lineinfile:
+        path: /home/plex/.config/transmission-daemon/settings.json
+        regexp: '    "download-dir": "/home/plex/Downloads",'
+        line: '    "download-dir": "/mnt/downloads",'
+      when: transmission
+
+    - name: updating download dir
+      become: yes
+      lineinfile:
+        path: /home/plex/.config/transmission-daemon/settings.json
+        regexp: '    "incomplete-dir-enabled": false,'
+        line: '    "incomplete-dir-enabled": true,'
+      when: transmission
+
+    - name: updating download dir
+      become: yes
+      lineinfile:
+        path: /home/plex/.config/transmission-daemon/settings.json
+        regexp: '    "incomplete-dir": "/home/plex/Downloads",'
+        line: '    "incomplete-dir": "/mnt/downloads/inc",'
+      when: transmission
+      
+      
+  
+      
     - name: change transmission config file ownership
       become: yes
       file:
@@ -153,7 +180,7 @@
         owner: plex
         group: plex
         recurse: yes
-      when: watcher
+      
 
     - name: create watcher service files
       become: yes

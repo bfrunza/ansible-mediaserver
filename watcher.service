@@ -10,8 +10,11 @@ Type=forking
 User=plex
 Group=plex
 WorkingDirectory= /opt/watcher/
-ExecStart=/usr/bin/python3 watcher.py --daemon
+ExecStart=/usr/bin/python3 watcher.py --daemon --pid /opt/watcher/watcher.pid
 TimeoutStopSec=20
+
+PIDFile=/opt/watcher/watcher.pid
+
 
 [Install]
 WantedBy=multi-user.target
